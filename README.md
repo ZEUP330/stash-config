@@ -36,16 +36,41 @@ https://raw.githubusercontent.com/ZEUP330/stash-config/main/Stash-Complete.stove
 
 地区规则是一组常用服务与域名，不能代表该地区所有网站，更不能保证互联网全部服务或功能均可用。域名命中优先于 IP 判断。
 
-## 检测面板
+## 检测面板 v2
 
-提供 ChatGPT、Claude、Google、YouTube、Netflix、Muse、Migoo 共 7 个 HTTP 检测面板。检测强制使用对应的服务策略组，每 30 分钟执行一次。
+更新覆写并重新应用，随后在「第三方服务」中刷新。新版使用独立的 `scripts/http-probe-v2.js` 地址，避免继续引用旧脚本路径；面板增加到 9 个。
 
-- 2xx：收到正常 HTTP 响应，不等于登录、聊天、播放、上传、语音或地区解锁成功。
-- 3xx：收到跳转，脚本不继续跟随，也不判定完整服务可用。
-- 403、429：明确显示拒绝或限流，不将其当成成功。
-- 超时及网络错误：明确显示请求失败。
+| 面板 | 实际检测地址 | 能说明什么 |
+| --- | --- | --- |
+| ChatGPT 地区接口 | `https://api.openai.com/compliance/cookie_requirements` | 匿名接口能否响应、是否明确返回地区拒绝；不等于ChatGPT账号可用 |
+| ChatGPT iOS入口 | `https://ios.chat.openai.com` | iOS入口响应及已知拦截提示；不测试登录或聊天 |
+| Claude 边缘网络 | `https://claude.ai/cdn-cgi/trace` | Trace能否访问及loc/colo线索；不等于Claude聊天可用，不是模型运算地点 |
+| Google | `https://www.google.com/generate_204` | 是否收到预期的204；不代表Gemini等全部Google产品可用 |
+| YouTube Premium页 | `https://www.youtube.com/premium` | 公开会员页面是否可达；不判断会员资格或地区支持 |
+| Netflix 影片页 | `https://www.netflix.com/title/81280792` | 指定样本页是否可达；不能证明完整解锁或播放权限 |
+| Muse、Migoo | 各自官网 | 仅检测HTTP响应，暂未找到可核实的专用匿名业务检测接口 |
+| GitHub API | `https://api.github.com/rate_limit` | 匿名API返回结构；不代表Git克隆、推送或Copilot可用 |
 
-脚本不读取账号凭据、不拦截 HTTPS、不需要 MitM；请求使用当前节点出口。检测脚本每天检查更新。
+检测地址参考 [Stash官方示例](https://github.com/StashNetworks/misc/tree/main/collapsed-tiles)、[Claude社区Trace用法](https://github.com/LangYa466/claude-usage-gnome)、[Hyseen Netflix样本检测](https://gist.github.com/Hyseen/b06e911a41036ebc36acf04ddebe7b9a)。参考地址不代表照搬它们的“Available”或“完整解锁”判断；我们的判断更保守。未从用户实际节点验证这些接口仍然有效，失效时会显示待核对。
+
+每个面板固定使用对应服务策略组，每30分钟执行一次匿名GET；不读取登录凭据、不重试、不跟随跳转、不执行人机验证、不自动更换服务出口。点击卡片打开官网，而非空白检测接口。
+
+- 2xx：按面板目的显示HTTP或接口可达，不承诺业务可用。
+- 3xx：中性的「跳转可达」，不再显示故障警告；后续页面未验证。
+- 401/403/429：中性显示需认证、待验证、限流，不能直接判断App不可用。
+- Google返回200而非预期204、Trace缺少loc、API返回HTML或错误JSON：显示待核对，不显示绿色成功。
+- 常见网页验证标题：显示需要网页验证，不尝试通过验证。此检测无法识别所有验证页。
+- 超时、连接失败、5xx：明确说明请求未完成或服务端异常，不自动归咎于节点。
+
+首行显示简短结果；详情列出请求耗时、策略组和本机检测时间。耗时是整个HTTP请求的耗时，不是节点ping或模型响应速度。
+
+## 图标与自动测速
+
+服务品牌PNG来自 [Homarr Dashboard Icons](https://github.com/homarr-labs/dashboard-icons)，固定到已核对的提交版本，避免图标文件随主分支变化。用于ChatGPT、Claude、Google、YouTube、Netflix、GitHub及部分策略组。未确认Muse/Migoo专用图标，保留系统图标，不用其他产品Logo冒充。
+
+服务Logo保持固定，检测状态由短文案和背景颜色表达。图标需要联网加载；不影响分流判断。上游图标及商标归原权利人所有。
+
+新增四个「自动-地区」策略组，按延迟选择节点，每10分钟检查；启用lazy并设置100ms切换容差。可在原「地区」组选择自动组，也可继续固定节点。测速仅判断网络连通，不验证服务解锁。已有手动选择可能继续保留，需要自行切到自动组选项。
 
 ## 更新与边界
 
@@ -53,4 +78,4 @@ https://raw.githubusercontent.com/ZEUP330/stash-config/main/Stash-Complete.stove
 - 本覆写的结构、手动补充域名和检测代码，需要提交本仓库更新后在 Stash 中更新覆写；它们不会由一个后台任务自动研究补全。
 - 不代理整个 AWS、Azure、CloudFront、Auth0 等共享平台；尽量按服务专用域名匹配。
 - `rules: #!replace` 会替换服务商原分流规则。没有默认加入广告拦截，DNS 沿用基础配置。
-- 本地已检查 YAML、策略组和规则引用、规则优先级、检测脚本语法及状态分支。未做 iOS Stash 实机测试，也未验证所有账号和节点的地区可用性。
+- 本地已检查 YAML、策略组和规则引用、规则优先级、新版检测脚本语法、状态分支与响应格式。未做 iOS Stash 实机测试，也未验证所有账号和节点的地区可用性。
